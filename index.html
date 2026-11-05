@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -113,10 +113,21 @@
       box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15);
     }
 
+    .cell.preview-valid {
+      outline: 2px solid rgba(255, 255, 255, 0.9);
+      outline-offset: -2px;
+      filter: brightness(1.2);
+    }
+
+    .cell.preview-invalid {
+      background: #9b4554;
+    }
+
     #floating-piece {
       position: fixed;
       z-index: 10;
       display: none;
+      grid-auto-rows: clamp(16px, 4.2vw, 22px);
       gap: 4px;
       pointer-events: none;
       opacity: 0.88;
@@ -128,29 +139,17 @@
       display: grid;
     }
 
-    .floating-block,
+    .floating-block {
+      width: clamp(16px, 4.2vw, 22px);
+      height: clamp(16px, 4.2vw, 22px);
+      border-radius: 4px;
+      background: var(--piece-color);
+      outline: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
     .floating-empty {
       width: clamp(16px, 4.2vw, 22px);
       height: clamp(16px, 4.2vw, 22px);
-    }
-
-    .floating-block {
-      border-radius: 4px;
-      background: var(--piece-color);
-    }
-
-    .floating-empty {
-      background: transparent;
-    }
-
-    .cell.preview-valid {
-      outline: 2px solid rgba(255, 255, 255, 0.9);
-      outline-offset: -2px;
-      filter: brightness(1.2);
-    }
-
-    .cell.preview-invalid {
-      background: #9b4554;
     }
 
     .pieces-area {
@@ -308,53 +307,49 @@
 </head>
 <body>
   <main class="game">
-    <h1>BLOCK PUZZLE 2D</h1>
-    <p class="subtitle">Encaixa os blocos, completa linhas e colunas e bate o teu recorde.</p>
+    <h1>BLOCK PUZZLE</h1>
+    <p class="subtitle">Fit the blocks, clear rows and columns, and beat your high score.</p>
 
-    <section class="scoreboard" aria-label="Pontuação">
+    <section class="scoreboard" aria-label="Scoreboard">
       <div class="score-card">
-        <span class="score-label">Pontuação</span>
+        <span class="score-label">Score</span>
         <span class="score-value" id="score">0</span>
       </div>
       <div class="score-card">
-        <span class="score-label">Recorde</span>
+        <span class="score-label">Best</span>
         <span class="score-value" id="best-score">0</span>
       </div>
     </section>
 
-    <section class="board-wrap" aria-label="Tabuleiro de jogo">
-      <div id="board" role="grid" aria-label="Tabuleiro de 8 por 8"></div>
+    <section class="board-wrap" aria-label="Game board">
+      <div id="board" role="grid" aria-label="8 by 8 game board"></div>
     </section>
 
     <section class="pieces-area">
-      <p class="pieces-title">Escolhe uma peça e toca numa posição do tabuleiro</p>
-      <div id="pieces" aria-label="Peças disponíveis"></div>
-      <p class="help" id="message" aria-live="polite">Seleciona uma das três peças para começar.</p>
+      <p class="pieces-title">Choose a piece and click a spot on the board</p>
+      <div id="pieces" aria-label="Available pieces"></div>
+      <p class="help" id="message" aria-live="polite">Select one of the three pieces to start.</p>
     </section>
 
     <div class="actions">
-      <button class="action-button" id="sound-button" type="button">
-        Som: ligado
-      </button>
-
-      <button class="action-button" id="restart-button" type="button">
-        Novo jogo
-      </button>
+      <button class="action-button" id="sound-button" type="button" aria-pressed="true">Sound: on</button>
+      <button class="action-button" id="restart-button" type="button">New Game</button>
     </div>
   </main>
 
   <div id="floating-piece" aria-hidden="true"></div>
+
   <div class="overlay" id="game-over" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
     <div class="modal">
-      <h2 id="game-over-title">Fim de jogo!</h2>
-      <p id="final-score">Pontuação: 0</p>
-      <button class="action-button" id="play-again-button" type="button">Jogar novamente</button>
+      <h2 id="game-over-title">Game Over!</h2>
+      <p id="final-score">Score: 0</p>
+      <button class="action-button" id="play-again-button" type="button">Play Again</button>
     </div>
   </div>
 
   <script>
     // ==============================
-    // CONFIGURAÇÃO E ESTADO DO JOGO
+    // GAME CONFIGURATION AND STATE
     // ==============================
 
     const BOARD_SIZE = 8;
@@ -395,7 +390,6 @@
     let gameIsOver = false;
     let pointerX = 0;
     let pointerY = 0;
-
     let audioContext = null;
     let musicTimer = null;
     let soundEnabled = true;
@@ -403,7 +397,7 @@
 
 
     // ==============================
-    // INICIALIZAÇÃO
+    // INITIALIZATION
     // ==============================
 
     function startGame() {
@@ -414,11 +408,12 @@
       gameIsOver = false;
 
       document.getElementById("game-over").classList.remove("visible");
+      hideFloatingPiece();
       updateScoreDisplay();
       generatePieces();
       renderBoard();
       renderPieces();
-      setMessage("Seleciona uma das três peças para começar.");
+      setMessage("Select one of the three pieces to start.");
     }
 
 
@@ -434,7 +429,7 @@
 
 
     // ==============================
-    // GERAÇÃO E APRESENTAÇÃO DE PEÇAS
+    // PIECE GENERATION AND DISPLAY
     // ==============================
 
     function createRandomPiece() {
@@ -462,7 +457,7 @@
         const slot = document.createElement("button");
         slot.type = "button";
         slot.className = "piece-slot";
-        slot.setAttribute("aria-label", `Selecionar peça ${index + 1}`);
+        slot.setAttribute("aria-label", `Select piece ${index + 1}`);
 
         if (!piece) {
           slot.disabled = true;
@@ -500,17 +495,14 @@
       }
 
       selectedPieceIndex = index;
-
       renderPieces();
-
       showFloatingPiece();
-
-      setMessage("A peça acompanha o cursor. Clica no tabuleiro para a colocar.");
+      setMessage("The piece follows your cursor. Click on the board to place it.");
     }
 
 
     // ==============================
-    // DESENHO E INTERAÇÃO COM O TABULEIRO
+    // BOARD RENDERING AND INTERACTION
     // ==============================
 
     function renderBoard() {
@@ -523,21 +515,15 @@
           cell.type = "button";
           cell.className = "cell";
           cell.setAttribute("role", "gridcell");
-          cell.setAttribute("aria-label", `Linha ${rowIndex + 1}, coluna ${columnIndex + 1}`);
+          cell.setAttribute("aria-label", `Row ${rowIndex + 1}, column ${columnIndex + 1}`);
 
           if (color) {
             cell.classList.add("filled");
             cell.style.setProperty("--block-color", color);
           }
 
-          cell.addEventListener("click", () => {
-            placeSelectedPiece(rowIndex, columnIndex);
-          });
-
-          cell.addEventListener("pointerenter", () => {
-            previewPlacement(rowIndex, columnIndex);
-          });
-
+          cell.addEventListener("click", () => placeSelectedPiece(rowIndex, columnIndex));
+          cell.addEventListener("pointerenter", () => previewPlacement(rowIndex, columnIndex));
           container.appendChild(cell);
         });
       });
@@ -576,14 +562,14 @@
       }
 
       if (selectedPieceIndex === null) {
-        setMessage("Escolhe primeiro uma peça.");
+        setMessage("Choose a piece first.");
         return;
       }
 
       const piece = availablePieces[selectedPieceIndex];
 
       if (!canPlacePiece(piece, row, column)) {
-        setMessage("Não é possível colocar a peça nessa posição.");
+        setMessage("You cannot place the piece in that position.");
         return;
       }
 
@@ -598,7 +584,6 @@
 
       availablePieces[selectedPieceIndex] = null;
       selectedPieceIndex = null;
-
       hideFloatingPiece();
 
       clearCompletedLines();
@@ -614,13 +599,13 @@
       checkGameOver();
 
       if (!gameIsOver) {
-        setMessage("Boa! Continua a encaixar os blocos.");
+        setMessage("Nice! Keep fitting those blocks.");
       }
     }
 
 
     // ==============================
-    // ELIMINAÇÃO DE LINHAS E COLUNAS
+    // CLEARING ROWS AND COLUMNS
     // ==============================
 
     function clearCompletedLines() {
@@ -672,13 +657,13 @@
       if (completedLines > 0) {
         score += completedLines * 10;
         playClearSound();
-        setMessage(`${completedLines} linha(s) eliminada(s)!`);
+        setMessage(`${completedLines} line(s) cleared!`);
       }
     }
 
 
     // ==============================
-    // PONTUAÇÃO E FIM DE JOGO
+    // SCORING AND GAME OVER
     // ==============================
 
     function updateBestScore() {
@@ -715,314 +700,230 @@
 
       gameIsOver = true;
       stopBackgroundMusic();
-      document.getElementById("final-score").textContent = `Pontuação final: ${score}`;
+      document.getElementById("final-score").textContent = `Final score: ${score}`;
       document.getElementById("game-over").classList.add("visible");
     }
 
 
-    // =====================================
-    // PEÇA QUE ACOMPANHA O CURSOR
-    // =====================================
+    // ==============================
+    // CURSOR-FOLLOWING PIECE
+    // ==============================
 
-function showFloatingPiece() {
+    function showFloatingPiece() {
+      const piece = availablePieces[selectedPieceIndex];
 
-    const piece = availablePieces[selectedPieceIndex];
+      if (!piece) {
+        hideFloatingPiece();
+        return;
+      }
 
-    if (!piece) return;
+      const floating = document.getElementById("floating-piece");
+      floating.innerHTML = "";
+      floating.style.gridTemplateColumns = `repeat(${piece.shape[0].length}, auto)`;
+      floating.style.setProperty("--piece-color", piece.color);
 
-    const floating = document.getElementById("floating-piece");
-
-    floating.innerHTML = "";
-
-    floating.style.gridTemplateColumns =
-        `repeat(${piece.shape[0].length}, auto)`;
-
-    floating.style.setProperty("--piece-color", piece.color);
-
-    piece.shape.forEach(row => {
-
+      piece.shape.forEach(row => {
         row.forEach(value => {
-
-            const block = document.createElement("span");
-
-            block.className = value
-                ? "floating-block"
-                : "floating-empty";
-
-            floating.appendChild(block);
-
+          const block = document.createElement("span");
+          block.className = value ? "floating-block" : "floating-empty";
+          floating.appendChild(block);
         });
+      });
 
-    });
-
-    floating.classList.add("visible");
-
-    moveFloatingPiece(pointerX, pointerY);
-}
+      floating.classList.add("visible");
+      moveFloatingPiece(pointerX, pointerY);
+    }
 
 
-function hideFloatingPiece() {
-
-    document.getElementById("floating-piece")
-        .classList.remove("visible");
-
-    clearBoardPreview();
-}
+    function hideFloatingPiece() {
+      document.getElementById("floating-piece").classList.remove("visible");
+      clearBoardPreview();
+    }
 
 
-function moveFloatingPiece(x, y) {
+    function moveFloatingPiece(x, y) {
+      const floating = document.getElementById("floating-piece");
 
-    const floating = document.getElementById("floating-piece");
+      if (selectedPieceIndex === null || !floating.classList.contains("visible")) {
+        return;
+      }
 
-    if (selectedPieceIndex === null) return;
-
-    if (!floating.classList.contains("visible")) return;
-
-    floating.style.left = `${x}px`;
-    floating.style.top = `${y}px`;
-}
-
-
-function clearBoardPreview() {
-
-    document.querySelectorAll(
-        ".cell.preview-valid, .cell.preview-invalid"
-    ).forEach(cell => {
-
-        cell.classList.remove(
-            "preview-valid",
-            "preview-invalid"
-        );
-
-    });
-}
+      floating.style.left = `${x}px`;
+      floating.style.top = `${y}px`;
+    }
 
 
-function previewPlacement(row, column) {
+    function clearBoardPreview() {
+      document.querySelectorAll(".cell.preview-valid, .cell.preview-invalid").forEach(cell => {
+        cell.classList.remove("preview-valid", "preview-invalid");
+      });
+    }
 
-    clearBoardPreview();
 
-    if (selectedPieceIndex === null) return;
+    function previewPlacement(row, column) {
+      clearBoardPreview();
 
-    const piece = availablePieces[selectedPieceIndex];
+      if (selectedPieceIndex === null || !availablePieces[selectedPieceIndex]) {
+        return;
+      }
 
-    if (!piece) return;
+      const piece = availablePieces[selectedPieceIndex];
+      const isValid = canPlacePiece(piece, row, column);
+      const cells = document.querySelectorAll("#board .cell");
 
-    const valid = canPlacePiece(piece, row, column);
-
-    const cells = document.querySelectorAll("#board .cell");
-
-    piece.shape.forEach((shapeRow, pieceRow) => {
-
+      piece.shape.forEach((shapeRow, pieceRow) => {
         shapeRow.forEach((value, pieceColumn) => {
+          if (!value) {
+            return;
+          }
 
-            if (!value) return;
+          const targetRow = row + pieceRow;
+          const targetColumn = column + pieceColumn;
 
-            const targetRow = row + pieceRow;
-            const targetColumn = column + pieceColumn;
+          if (
+            targetRow >= 0 && targetRow < BOARD_SIZE &&
+            targetColumn >= 0 && targetColumn < BOARD_SIZE
+          ) {
+            const cell = cells[targetRow * BOARD_SIZE + targetColumn];
 
-            if (
-                targetRow >= 0 &&
-                targetRow < BOARD_SIZE &&
-                targetColumn >= 0 &&
-                targetColumn < BOARD_SIZE
-            ) {
-
-                const cell = cells[
-                    targetRow * BOARD_SIZE + targetColumn
-                ];
-
-                cell.classList.add(
-                    valid ? "preview-valid" : "preview-invalid"
-                );
-
+            if (cell) {
+              cell.classList.add(isValid ? "preview-valid" : "preview-invalid");
             }
-
+          }
         });
-
-    });
-
-}
+      });
+    }
 
 
-// =====================================
-// SISTEMA DE ÁUDIO
-// =====================================
+    // ==============================
+    // AUDIO (BACKGROUND MUSIC AND LINE-CLEAR SOUND)
+    // ==============================
 
-function getAudioContext() {
+    function getAudioContext() {
+      if (!audioContext) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 
-    if (!audioContext) {
-
-        const AudioContextClass =
-            window.AudioContext || window.webkitAudioContext;
-
-        if (!AudioContextClass) return null;
+        if (!AudioContextClass) {
+          setMessage("This browser does not support Web Audio.");
+          return null;
+        }
 
         audioContext = new AudioContextClass();
+      }
 
-    }
-
-    if (audioContext.state === "suspended") {
+      if (audioContext.state === "suspended") {
         audioContext.resume();
+      }
+
+      return audioContext;
     }
 
-    return audioContext;
-}
+
+    function playTone(frequency, duration, volume, type = "sine", startDelay = 0) {
+      if (!soundEnabled) {
+        return;
+      }
+
+      const context = getAudioContext();
+
+      if (!context) {
+        return;
+      }
+
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const startAt = context.currentTime + startDelay;
+
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, startAt);
+      gain.gain.setValueAtTime(0.0001, startAt);
+      gain.gain.exponentialRampToValueAtTime(volume, startAt + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(startAt);
+      oscillator.stop(startAt + duration + 0.03);
+    }
 
 
-function playTone(frequency, duration, volume, type = "sine", delay = 0) {
+    function startBackgroundMusic() {
+      if (!soundEnabled || musicTimer || gameIsOver) {
+        return;
+      }
 
-    if (!soundEnabled) return;
+      getAudioContext();
 
-    const context = getAudioContext();
+      const melody = [261.63, 329.63, 392.00, 329.63, 293.66, 349.23, 392.00, 349.23];
 
-    if (!context) return;
-
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-
-    const start = context.currentTime + delay;
-
-    oscillator.type = type;
-
-    oscillator.frequency.setValueAtTime(frequency, start);
-
-    gain.gain.setValueAtTime(0.0001, start);
-
-    gain.gain.exponentialRampToValueAtTime(
-        volume,
-        start + 0.025
-    );
-
-    gain.gain.exponentialRampToValueAtTime(
-        0.0001,
-        start + duration
-    );
-
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-
-    oscillator.start(start);
-    oscillator.stop(start + duration + 0.03);
-
-}
-
-
-function startBackgroundMusic() {
-
-    if (!soundEnabled || musicTimer || gameIsOver) return;
-
-    getAudioContext();
-
-    const melody = [
-        261.63, 329.63, 392.00, 329.63,
-        293.66, 349.23, 392.00, 349.23
-    ];
-
-    musicTimer = setInterval(() => {
-
+      musicTimer = window.setInterval(() => {
         if (!soundEnabled || gameIsOver) {
-
-            stopBackgroundMusic();
-            return;
-
+          stopBackgroundMusic();
+          return;
         }
 
         const note = melody[musicStep % melody.length];
-
         playTone(note, 0.42, 0.018, "sine");
         playTone(note / 2, 0.55, 0.009, "triangle");
-
-        musicStep++;
-
-    }, 520);
-
-}
-
-
-function stopBackgroundMusic() {
-
-    if (musicTimer) {
-
-        clearInterval(musicTimer);
-
-        musicTimer = null;
-
+        musicStep += 1;
+      }, 520);
     }
 
-}
+
+    function stopBackgroundMusic() {
+      if (musicTimer) {
+        window.clearInterval(musicTimer);
+        musicTimer = null;
+      }
+    }
 
 
-function playClearSound() {
-
-    playTone(660, 0.12, 0.09, "triangle", 0);
-    playTone(880, 0.18, 0.08, "triangle", 0.10);
-    playTone(1174.66, 0.24, 0.07, "sine", 0.22);
-
-}
+    function playClearSound() {
+      playTone(660, 0.12, 0.09, "triangle", 0);
+      playTone(880, 0.18, 0.08, "triangle", 0.10);
+      playTone(1174.66, 0.24, 0.07, "sine", 0.22);
+    }
 
 
-function toggleSound() {
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      const button = document.getElementById("sound-button");
 
-    soundEnabled = !soundEnabled;
+      button.textContent = soundEnabled ? "Sound: on" : "Sound: off";
+      button.setAttribute("aria-pressed", String(soundEnabled));
 
-    const button = document.getElementById("sound-button");
-
-    button.textContent = soundEnabled
-        ? "Som: ligado"
-        : "Som: desligado";
-
-    if (soundEnabled) {
-
+      if (soundEnabled) {
         getAudioContext();
         startBackgroundMusic();
-
-    } else {
-
+      } else {
         stopBackgroundMusic();
-
+      }
     }
 
-}
 
     // ==============================
-    // EVENTOS
+    // EVENT LISTENERS
     // ==============================
 
-    document.getElementById("restart-button")
-    .addEventListener("click", startGame);
+    document.getElementById("restart-button").addEventListener("click", startGame);
 
-document.getElementById("play-again-button")
-    .addEventListener("click", startGame);
+    document.getElementById("play-again-button").addEventListener("click", startGame);
 
-document.getElementById("sound-button")
-    .addEventListener("click", toggleSound);
+    document.getElementById("sound-button").addEventListener("click", toggleSound);
 
+    document.addEventListener("pointermove", event => {
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      moveFloatingPiece(pointerX, pointerY);
+    });
 
-// Movimento da peça com o rato
-
-document.addEventListener("pointermove", event => {
-
-    pointerX = event.clientX;
-    pointerY = event.clientY;
-
-    moveFloatingPiece(pointerX, pointerY);
-
-});
-
-
-// Iniciar música após interação do jogador
-
-document.addEventListener("pointerdown", () => {
-
-    if (soundEnabled && !gameIsOver) {
+    document.addEventListener("pointerdown", () => {
+      if (soundEnabled && !gameIsOver) {
         startBackgroundMusic();
-    }
+      }
+    }, { once: true });
 
-}, { once: true });
-
-
-startGame();
+    startGame();
   </script>
 </body>
 </html>
