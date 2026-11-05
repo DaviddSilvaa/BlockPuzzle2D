@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101827">
+  <title>Block Puzzle</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: #101827;
+      --panel: #1b293d;
+      --panel-light: #263750;
+      --cell: #26354a;
+      --text: #f4f7fb;
+      --muted: #a8b5c8;
+      --accent: #69d5c2;
+      --gap: 5px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px 14px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(circle at top, #1d3048 0%, var(--background) 58%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .game {
+      width: min(100%, 540px);
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: clamp(2rem, 7vw, 2.8rem);
+      letter-spacing: 0.04em;
+    }
+
+    .subtitle {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .scoreboard {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .score-card {
+      padding: 12px;
+      border: 1px solid #34465e;
+      border-radius: 14px;
+      background: rgba(27, 41, 61, 0.92);
+    }
+
+    .score-label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .score-value {
+      font-size: 1.55rem;
+      font-weight: 750;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .board-wrap {
+      padding: 10px;
+      border: 1px solid #34465e;
+      border-radius: 18px;
+      background: rgba(27, 41, 61, 0.96);
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.24);
+    }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: var(--gap);
+      width: 100%;
+      aspect-ratio: 1;
+      touch-action: manipulation;
+    }
+
+    .cell {
+      min-width: 0;
+      border-radius: 6px;
+      background: var(--cell);
+      transition: background 120ms ease, transform 120ms ease;
+    }
+
+    .cell.filled {
+      background: var(--block-color);
+      box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15);
+    }
+
+    .cell.preview-valid {
+      outline: 2px solid rgba(255, 255, 255, 0.9);
+      outline-offset: -2px;
+      filter: brightness(1.2);
+    }
+
+    .cell.preview-invalid {
+      background: #9b4554;
+    }
+
+    .pieces-area {
+      margin-top: 18px;
+      padding: 16px 12px;
+      border: 1px solid #34465e;
+      border-radius: 18px;
+      background: rgba(27, 41, 61, 0.92);
+    }
+
+    .pieces-title {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    #pieces {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      align-items: center;
+      min-height: 94px;
+    }
+
+    .piece-slot {
+      min-width: 0;
+      min-height: 84px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      background: rgba(10, 18, 30, 0.22);
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .piece-slot.selected {
+      border-color: var(--accent);
+      background: rgba(105, 213, 194, 0.1);
+    }
+
+    .piece-slot:disabled {
+      cursor: default;
+      opacity: 0.2;
+    }
+
+    .piece-grid {
+      display: grid;
+      gap: 4px;
+      pointer-events: none;
+    }
+
+    .piece-block {
+      width: clamp(13px, 4.1vw, 20px);
+      height: clamp(13px, 4.1vw, 20px);
+      border-radius: 4px;
+      background: var(--piece-color);
+      box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.15);
+    }
+
+    .piece-empty {
+      width: clamp(13px, 4.1vw, 20px);
+      height: clamp(13px, 4.1vw, 20px);
+    }
+
+    .help {
+      min-height: 24px;
+      margin: 13px 0 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .action-button {
+      padding: 11px 20px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #10232b;
+      font-weight: 750;
+      cursor: pointer;
+      transition: transform 120ms ease, filter 120ms ease;
+    }
+
+    .action-button:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+
+    .action-button:focus-visible,
+    .piece-slot:focus-visible {
+      outline: 3px solid white;
+      outline-offset: 3px;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(5, 10, 18, 0.78);
+    }
+
+    .overlay.visible {
+      display: flex;
+    }
+
+    .modal {
+      width: min(100%, 340px);
+      padding: 28px 22px;
+      border: 1px solid #425570;
+      border-radius: 20px;
+      background: #1b293d;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
+
+    .modal h2 {
+      margin: 0 0 8px;
+      font-size: 1.8rem;
+    }
+
+    .modal p {
+      margin: 0 0 20px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 380px) {
+      body {
+        padding: 16px 9px;
+      }
+
+      .board-wrap {
+        padding: 7px;
+      }
+
+      :root {
+        --gap: 4px;
+      }
+
+      .piece-slot {
+        min-height: 74px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="game">
+    <h1>BLOCK PUZZLE</h1>
+    <p class="subtitle">Encaixa os blocos, completa linhas e colunas e bate o teu recorde.</p>
+
+    <section class="scoreboard" aria-label="Pontuação">
+      <div class="score-card">
+        <span class="score-label">Pontuação</span>
+        <span class="score-value" id="score">0</span>
+      </div>
+      <div class="score-card">
+        <span class="score-label">Recorde</span>
+        <span class="score-value" id="best-score">0</span>
+      </div>
+    </section>
+
+    <section class="board-wrap" aria-label="Tabuleiro de jogo">
+      <div id="board" role="grid" aria-label="Tabuleiro de 8 por 8"></div>
+    </section>
+
+    <section class="pieces-area">
+      <p class="pieces-title">Escolhe uma peça e toca numa posição do tabuleiro</p>
+      <div id="pieces" aria-label="Peças disponíveis"></div>
+      <p class="help" id="message" aria-live="polite">Seleciona uma das três peças para começar.</p>
+    </section>
+
+    <div class="actions">
+      <button class="action-button" id="restart-button" type="button">Novo jogo</button>
+    </div>
+  </main>
+
+  <div class="overlay" id="game-over" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
+    <div class="modal">
+      <h2 id="game-over-title">Fim de jogo!</h2>
+      <p id="final-score">Pontuação: 0</p>
+      <button class="action-button" id="play-again-button" type="button">Jogar novamente</button>
+    </div>
+  </div>
+
+  <script>
+    // ==============================
+    // CONFIGURAÇÃO E ESTADO DO JOGO
+    // ==============================
+
+    const BOARD_SIZE = 8;
+
+    const COLORS = [
+      "#4ecdc4",
+      "#ff6b6b",
+      "#ffd166",
+      "#6c9eff",
+      "#bd8cff",
+      "#ff9f68"
+    ];
+
+    const SHAPES = [
+      [[1]],
+      [[1, 1]],
+      [[1], [1]],
+      [[1, 1, 1]],
+      [[1], [1], [1]],
+      [[1, 1], [1, 1]],
+      [[1, 0], [1, 1]],
+      [[0, 1], [1, 1]],
+      [[1, 1], [1, 0]],
+      [[1, 1], [0, 1]],
+      [[1, 0], [1, 0], [1, 1]],
+      [[0, 1], [0, 1], [1, 1]],
+      [[1, 1, 1, 1]],
+      [[1], [1], [1], [1]],
+      [[1, 1, 1], [0, 1, 0]],
+      [[0, 1, 0], [1, 1, 1]]
+    ];
+
+    let board = [];
+    let availablePieces = [];
+    let selectedPieceIndex = null;
+    let score = 0;
+    let bestScore = Number(localStorage.getItem("blockPuzzleBest") || 0);
+    let gameIsOver = false;
+
+
+    // ==============================
+    // INICIALIZAÇÃO
+    // ==============================
+
+    function startGame() {
+      board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
+      availablePieces = [];
+      selectedPieceIndex = null;
+      score = 0;
+      gameIsOver = false;
+
+      document.getElementById("game-over").classList.remove("visible");
+      updateScoreDisplay();
+      generatePieces();
+      renderBoard();
+      renderPieces();
+      setMessage("Seleciona uma das três peças para começar.");
+    }
+
+
+    function updateScoreDisplay() {
+      document.getElementById("score").textContent = score;
+      document.getElementById("best-score").textContent = bestScore;
+    }
+
+
+    function setMessage(message) {
+      document.getElementById("message").textContent = message;
+    }
+
+
+    // ==============================
+    // GERAÇÃO E APRESENTAÇÃO DE PEÇAS
+    // ==============================
+
+    function createRandomPiece() {
+      const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+      const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+
+      return {
+        shape: shape.map(row => [...row]),
+        color: color
+      };
+    }
+
+
+    function generatePieces() {
+      availablePieces = [createRandomPiece(), createRandomPiece(), createRandomPiece()];
+      selectedPieceIndex = null;
+    }
+
+
+    function renderPieces() {
+      const container = document.getElementById("pieces");
+      container.innerHTML = "";
+
+      availablePieces.forEach((piece, index) => {
+        const slot = document.createElement("button");
+        slot.type = "button";
+        slot.className = "piece-slot";
+        slot.setAttribute("aria-label", `Selecionar peça ${index + 1}`);
+
+        if (!piece) {
+          slot.disabled = true;
+          container.appendChild(slot);
+          return;
+        }
+
+        if (selectedPieceIndex === index) {
+          slot.classList.add("selected");
+        }
+
+        const pieceGrid = document.createElement("div");
+        pieceGrid.className = "piece-grid";
+        pieceGrid.style.gridTemplateColumns = `repeat(${piece.shape[0].length}, auto)`;
+        pieceGrid.style.setProperty("--piece-color", piece.color);
+
+        piece.shape.forEach(row => {
+          row.forEach(value => {
+            const block = document.createElement("span");
+            block.className = value ? "piece-block" : "piece-empty";
+            pieceGrid.appendChild(block);
+          });
+        });
+
+        slot.appendChild(pieceGrid);
+        slot.addEventListener("click", () => selectPiece(index));
+        container.appendChild(slot);
+      });
+    }
+
+
+    function selectPiece(index) {
+      if (gameIsOver || !availablePieces[index]) {
+        return;
+      }
+
+      selectedPieceIndex = index;
+      renderPieces();
+      setMessage("Agora toca numa célula onde a peça caiba.");
+    }
+
+
+    // ==============================
+    // DESENHO E INTERAÇÃO COM O TABULEIRO
+    // ==============================
+
+    function renderBoard() {
+      const container = document.getElementById("board");
+      container.innerHTML = "";
+
+      board.forEach((row, rowIndex) => {
+        row.forEach((color, columnIndex) => {
+          const cell = document.createElement("button");
+          cell.type = "button";
+          cell.className = "cell";
+          cell.setAttribute("role", "gridcell");
+          cell.setAttribute("aria-label", `Linha ${rowIndex + 1}, coluna ${columnIndex + 1}`);
+
+          if (color) {
+            cell.classList.add("filled");
+            cell.style.setProperty("--block-color", color);
+          }
+
+          cell.addEventListener("click", () => placeSelectedPiece(rowIndex, columnIndex));
+          container.appendChild(cell);
+        });
+      });
+    }
+
+
+    function canPlacePiece(piece, startRow, startColumn) {
+      for (let row = 0; row < piece.shape.length; row++) {
+        for (let column = 0; column < piece.shape[row].length; column++) {
+          if (!piece.shape[row][column]) {
+            continue;
+          }
+
+          const targetRow = startRow + row;
+          const targetColumn = startColumn + column;
+
+          if (
+            targetRow < 0 ||
+            targetRow >= BOARD_SIZE ||
+            targetColumn < 0 ||
+            targetColumn >= BOARD_SIZE ||
+            board[targetRow][targetColumn] !== null
+          ) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    }
+
+
+    function placeSelectedPiece(row, column) {
+      if (gameIsOver) {
+        return;
+      }
+
+      if (selectedPieceIndex === null) {
+        setMessage("Escolhe primeiro uma peça.");
+        return;
+      }
+
+      const piece = availablePieces[selectedPieceIndex];
+
+      if (!canPlacePiece(piece, row, column)) {
+        setMessage("Não é possível colocar a peça nessa posição.");
+        return;
+      }
+
+      for (let pieceRow = 0; pieceRow < piece.shape.length; pieceRow++) {
+        for (let pieceColumn = 0; pieceColumn < piece.shape[pieceRow].length; pieceColumn++) {
+          if (piece.shape[pieceRow][pieceColumn]) {
+            board[row + pieceRow][column + pieceColumn] = piece.color;
+            score += 1;
+          }
+        }
+      }
+
+      availablePieces[selectedPieceIndex] = null;
+      selectedPieceIndex = null;
+
+      clearCompletedLines();
+      updateBestScore();
+      updateScoreDisplay();
+      renderBoard();
+
+      if (availablePieces.every(item => item === null)) {
+        generatePieces();
+      }
+
+      renderPieces();
+      checkGameOver();
+
+      if (!gameIsOver) {
+        setMessage("Boa! Continua a encaixar os blocos.");
+      }
+    }
+
+
+    // ==============================
+    // ELIMINAÇÃO DE LINHAS E COLUNAS
+    // ==============================
+
+    function clearCompletedLines() {
+      const fullRows = [];
+      const fullColumns = [];
+
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        if (board[row].every(cell => cell !== null)) {
+          fullRows.push(row);
+        }
+      }
+
+      for (let column = 0; column < BOARD_SIZE; column++) {
+        let isFull = true;
+
+        for (let row = 0; row < BOARD_SIZE; row++) {
+          if (board[row][column] === null) {
+            isFull = false;
+            break;
+          }
+        }
+
+        if (isFull) {
+          fullColumns.push(column);
+        }
+      }
+
+      const clearedCells = new Set();
+
+      fullRows.forEach(row => {
+        for (let column = 0; column < BOARD_SIZE; column++) {
+          clearedCells.add(`${row},${column}`);
+        }
+      });
+
+      fullColumns.forEach(column => {
+        for (let row = 0; row < BOARD_SIZE; row++) {
+          clearedCells.add(`${row},${column}`);
+        }
+      });
+
+      clearedCells.forEach(position => {
+        const [row, column] = position.split(",").map(Number);
+        board[row][column] = null;
+      });
+
+      const completedLines = fullRows.length + fullColumns.length;
+
+      if (completedLines > 0) {
+        score += completedLines * 10;
+        setMessage(`${completedLines} linha(s) eliminada(s)!`);
+      }
+    }
+
+
+    // ==============================
+    // PONTUAÇÃO E FIM DE JOGO
+    // ==============================
+
+    function updateBestScore() {
+      if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem("blockPuzzleBest", String(bestScore));
+      }
+    }
+
+
+    function hasAnyValidMove() {
+      for (const piece of availablePieces) {
+        if (!piece) {
+          continue;
+        }
+
+        for (let row = 0; row < BOARD_SIZE; row++) {
+          for (let column = 0; column < BOARD_SIZE; column++) {
+            if (canPlacePiece(piece, row, column)) {
+              return true;
+            }
+          }
+        }
+      }
+
+      return false;
+    }
+
+
+    function checkGameOver() {
+      if (hasAnyValidMove()) {
+        return;
+      }
+
+      gameIsOver = true;
+      document.getElementById("final-score").textContent = `Pontuação final: ${score}`;
+      document.getElementById("game-over").classList.add("visible");
+    }
+
+
+    // ==============================
+    // EVENTOS
+    // ==============================
+
+    document.getElementById("restart-button").addEventListener("click", startGame);
+
+    document.getElementById("play-again-button").addEventListener("click", startGame);
+
+    startGame();
+  </script>
+</body>
+</html>
