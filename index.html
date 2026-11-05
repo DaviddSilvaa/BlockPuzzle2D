@@ -113,6 +113,36 @@
       box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15);
     }
 
+    #floating-piece {
+      position: fixed;
+      z-index: 10;
+      display: none;
+      gap: 4px;
+      pointer-events: none;
+      opacity: 0.88;
+      transform: translate(14px, 14px);
+      filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.35));
+    }
+
+    #floating-piece.visible {
+      display: grid;
+    }
+
+    .floating-block,
+    .floating-empty {
+      width: clamp(16px, 4.2vw, 22px);
+      height: clamp(16px, 4.2vw, 22px);
+    }
+
+    .floating-block {
+      border-radius: 4px;
+      background: var(--piece-color);
+    }
+
+    .floating-empty {
+      background: transparent;
+    }
+
     .cell.preview-valid {
       outline: 2px solid rgba(255, 255, 255, 0.9);
       outline-offset: -2px;
@@ -278,7 +308,7 @@
 </head>
 <body>
   <main class="game">
-    <h1>BLOCK PUZZLE</h1>
+    <h1>BLOCK PUZZLE 2D</h1>
     <p class="subtitle">Encaixa os blocos, completa linhas e colunas e bate o teu recorde.</p>
 
     <section class="scoreboard" aria-label="Pontuação">
@@ -303,10 +333,17 @@
     </section>
 
     <div class="actions">
-      <button class="action-button" id="restart-button" type="button">Novo jogo</button>
+      <button class="action-button" id="sound-button" type="button">
+        Som: ligado
+      </button>
+
+      <button class="action-button" id="restart-button" type="button">
+        Novo jogo
+      </button>
     </div>
   </main>
 
+  <div id="floating-piece" aria-hidden="true"></div>
   <div class="overlay" id="game-over" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
     <div class="modal">
       <h2 id="game-over-title">Fim de jogo!</h2>
@@ -356,6 +393,13 @@
     let score = 0;
     let bestScore = Number(localStorage.getItem("blockPuzzleBest") || 0);
     let gameIsOver = false;
+    let pointerX = 0;
+    let pointerY = 0;
+
+    let audioContext = null;
+    let musicTimer = null;
+    let soundEnabled = true;
+    let musicStep = 0;
 
 
     // ==============================
@@ -456,8 +500,12 @@
       }
 
       selectedPieceIndex = index;
+
       renderPieces();
-      setMessage("Agora toca numa célula onde a peça caiba.");
+
+      showFloatingPiece();
+
+      setMessage("A peça acompanha o cursor. Clica no tabuleiro para a colocar.");
     }
 
 
@@ -482,7 +530,14 @@
             cell.style.setProperty("--block-color", color);
           }
 
-          cell.addEventListener("click", () => placeSelectedPiece(rowIndex, columnIndex));
+          cell.addEventListener("click", () => {
+            placeSelectedPiece(rowIndex, columnIndex);
+          });
+
+          cell.addEventListener("pointerenter", () => {
+            previewPlacement(rowIndex, columnIndex);
+          });
+
           container.appendChild(cell);
         });
       });
@@ -543,6 +598,8 @@
 
       availablePieces[selectedPieceIndex] = null;
       selectedPieceIndex = null;
+
+      hideFloatingPiece();
 
       clearCompletedLines();
       updateBestScore();
@@ -614,6 +671,7 @@
 
       if (completedLines > 0) {
         score += completedLines * 10;
+        playClearSound();
         setMessage(`${completedLines} linha(s) eliminada(s)!`);
       }
     }
@@ -656,20 +714,315 @@
       }
 
       gameIsOver = true;
+      stopBackgroundMusic();
       document.getElementById("final-score").textContent = `Pontuação final: ${score}`;
       document.getElementById("game-over").classList.add("visible");
     }
 
 
+    // =====================================
+    // PEÇA QUE ACOMPANHA O CURSOR
+    // =====================================
+
+function showFloatingPiece() {
+
+    const piece = availablePieces[selectedPieceIndex];
+
+    if (!piece) return;
+
+    const floating = document.getElementById("floating-piece");
+
+    floating.innerHTML = "";
+
+    floating.style.gridTemplateColumns =
+        `repeat(${piece.shape[0].length}, auto)`;
+
+    floating.style.setProperty("--piece-color", piece.color);
+
+    piece.shape.forEach(row => {
+
+        row.forEach(value => {
+
+            const block = document.createElement("span");
+
+            block.className = value
+                ? "floating-block"
+                : "floating-empty";
+
+            floating.appendChild(block);
+
+        });
+
+    });
+
+    floating.classList.add("visible");
+
+    moveFloatingPiece(pointerX, pointerY);
+}
+
+
+function hideFloatingPiece() {
+
+    document.getElementById("floating-piece")
+        .classList.remove("visible");
+
+    clearBoardPreview();
+}
+
+
+function moveFloatingPiece(x, y) {
+
+    const floating = document.getElementById("floating-piece");
+
+    if (selectedPieceIndex === null) return;
+
+    if (!floating.classList.contains("visible")) return;
+
+    floating.style.left = `${x}px`;
+    floating.style.top = `${y}px`;
+}
+
+
+function clearBoardPreview() {
+
+    document.querySelectorAll(
+        ".cell.preview-valid, .cell.preview-invalid"
+    ).forEach(cell => {
+
+        cell.classList.remove(
+            "preview-valid",
+            "preview-invalid"
+        );
+
+    });
+}
+
+
+function previewPlacement(row, column) {
+
+    clearBoardPreview();
+
+    if (selectedPieceIndex === null) return;
+
+    const piece = availablePieces[selectedPieceIndex];
+
+    if (!piece) return;
+
+    const valid = canPlacePiece(piece, row, column);
+
+    const cells = document.querySelectorAll("#board .cell");
+
+    piece.shape.forEach((shapeRow, pieceRow) => {
+
+        shapeRow.forEach((value, pieceColumn) => {
+
+            if (!value) return;
+
+            const targetRow = row + pieceRow;
+            const targetColumn = column + pieceColumn;
+
+            if (
+                targetRow >= 0 &&
+                targetRow < BOARD_SIZE &&
+                targetColumn >= 0 &&
+                targetColumn < BOARD_SIZE
+            ) {
+
+                const cell = cells[
+                    targetRow * BOARD_SIZE + targetColumn
+                ];
+
+                cell.classList.add(
+                    valid ? "preview-valid" : "preview-invalid"
+                );
+
+            }
+
+        });
+
+    });
+
+}
+
+
+// =====================================
+// SISTEMA DE ÁUDIO
+// =====================================
+
+function getAudioContext() {
+
+    if (!audioContext) {
+
+        const AudioContextClass =
+            window.AudioContext || window.webkitAudioContext;
+
+        if (!AudioContextClass) return null;
+
+        audioContext = new AudioContextClass();
+
+    }
+
+    if (audioContext.state === "suspended") {
+        audioContext.resume();
+    }
+
+    return audioContext;
+}
+
+
+function playTone(frequency, duration, volume, type = "sine", delay = 0) {
+
+    if (!soundEnabled) return;
+
+    const context = getAudioContext();
+
+    if (!context) return;
+
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+
+    const start = context.currentTime + delay;
+
+    oscillator.type = type;
+
+    oscillator.frequency.setValueAtTime(frequency, start);
+
+    gain.gain.setValueAtTime(0.0001, start);
+
+    gain.gain.exponentialRampToValueAtTime(
+        volume,
+        start + 0.025
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        start + duration
+    );
+
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.03);
+
+}
+
+
+function startBackgroundMusic() {
+
+    if (!soundEnabled || musicTimer || gameIsOver) return;
+
+    getAudioContext();
+
+    const melody = [
+        261.63, 329.63, 392.00, 329.63,
+        293.66, 349.23, 392.00, 349.23
+    ];
+
+    musicTimer = setInterval(() => {
+
+        if (!soundEnabled || gameIsOver) {
+
+            stopBackgroundMusic();
+            return;
+
+        }
+
+        const note = melody[musicStep % melody.length];
+
+        playTone(note, 0.42, 0.018, "sine");
+        playTone(note / 2, 0.55, 0.009, "triangle");
+
+        musicStep++;
+
+    }, 520);
+
+}
+
+
+function stopBackgroundMusic() {
+
+    if (musicTimer) {
+
+        clearInterval(musicTimer);
+
+        musicTimer = null;
+
+    }
+
+}
+
+
+function playClearSound() {
+
+    playTone(660, 0.12, 0.09, "triangle", 0);
+    playTone(880, 0.18, 0.08, "triangle", 0.10);
+    playTone(1174.66, 0.24, 0.07, "sine", 0.22);
+
+}
+
+
+function toggleSound() {
+
+    soundEnabled = !soundEnabled;
+
+    const button = document.getElementById("sound-button");
+
+    button.textContent = soundEnabled
+        ? "Som: ligado"
+        : "Som: desligado";
+
+    if (soundEnabled) {
+
+        getAudioContext();
+        startBackgroundMusic();
+
+    } else {
+
+        stopBackgroundMusic();
+
+    }
+
+}
+
     // ==============================
     // EVENTOS
     // ==============================
 
-    document.getElementById("restart-button").addEventListener("click", startGame);
+    document.getElementById("restart-button")
+    .addEventListener("click", startGame);
 
-    document.getElementById("play-again-button").addEventListener("click", startGame);
+document.getElementById("play-again-button")
+    .addEventListener("click", startGame);
 
-    startGame();
+document.getElementById("sound-button")
+    .addEventListener("click", toggleSound);
+
+
+// Movimento da peça com o rato
+
+document.addEventListener("pointermove", event => {
+
+    pointerX = event.clientX;
+    pointerY = event.clientY;
+
+    moveFloatingPiece(pointerX, pointerY);
+
+});
+
+
+// Iniciar música após interação do jogador
+
+document.addEventListener("pointerdown", () => {
+
+    if (soundEnabled && !gameIsOver) {
+        startBackgroundMusic();
+    }
+
+}, { once: true });
+
+
+startGame();
   </script>
 </body>
 </html>
